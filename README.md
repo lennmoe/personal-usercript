@@ -15,6 +15,7 @@ A collection of userscripts for various websites.
 - **VNDB Character Count.js** - Display character counts on VNDB
 - **VNDB Official Links and Release Dates.js** - Show official links and release information
 - **VNDB Score Graph.js** - Display score graphs for visual novels
+- **VNDB Shearch CG.js** - Search for CGs on "hitomi.la" & "imhentai.xxx" & "e-hentai.org"
 
 ## Installation
 
