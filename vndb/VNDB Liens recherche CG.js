@@ -3,7 +3,7 @@
 // @namespace    vndb-cg-search-links
 // @version      1.0
 // @description  Ajoute une ligne avec des liens de recherche CG pour le(s) titre(s) JP et EN uniquement (pas les aliases)
-// @author       you
+// @author       lennmoe
 // @match        https://vndb.org/v*
 // @match        https://vndb.org/*v*
 // @grant        none
