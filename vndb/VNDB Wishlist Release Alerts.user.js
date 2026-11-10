@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VNDB - Wishlist Release Alerts
 // @namespace    vndb-wishlist-releases
-// @version      1.1
+// @version      1.2
 // @description  Adds a "Wishlist releases" box to the VNDB sidebar: upcoming releases (date, month, year or TBA) and releases from the last 30 days for the VNs on your wishlist, filtered by language (EN + JP by default, no MTL). On your list page (/u123/ulist), a badge with flag and date is shown next to each matching VN. Data comes from the VNDB API using your session, is cached for 6 hours and can be refreshed from the box. The userscript manager menu lets you choose the tracked languages and force a refresh.
 // @author       lennmoe
 // @homepageURL  https://github.com/lennmoe/personal-usercript
@@ -30,7 +30,8 @@
   const todayKey = isoDay(new Date());
 
   function myUserId() {
-    const a = [...document.querySelectorAll('body > nav a[href^="/u"]')].find((x) => x.textContent.trim() === 'My Profile');
+    const links = [...document.querySelectorAll('nav a[href^="/u"]')];
+    const a = links.find((x) => x.textContent.trim() === 'My Profile') || links.find((x) => /^\/u\d+$/.test(x.getAttribute('href')));
     return a?.getAttribute('href').match(/^\/(u\d+)$/)?.[1] || null;
   }
 
@@ -151,7 +152,7 @@
   }
 
   function renderSidebar(user, data, error) {
-    const nav = document.querySelector('body > nav');
+    const nav = document.querySelector('body > nav') || document.querySelector('#support')?.parentElement;
     if (!nav) return;
     let box = document.getElementById('vra-box');
     if (!box) {
