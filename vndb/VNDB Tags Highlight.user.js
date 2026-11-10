@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VNDB - Tags Highlight
 // @namespace    vndb-tags-highlight
-// @version      1.1
+// @version      1.2
 // @description  Surligne en vert les tags que tu aimes et en rouge ceux à éviter, sur la fiche VN et sur la page /tags. Shift+clic sur un tag pour passer de neutre → aimé → à éviter → neutre ; sur une page de tag (/g123), des boutons font la même chose. Sous la cover de la fiche, une case affiche ta compatibilité en % : 50% de base, jusqu'à +50% selon la note (0–3) de tes tags aimés présents (objectif = min(tags aimés, 5) tags notés 3.0), et −35% par tag à éviter noté 3.0 (proportionnel à la note). Les tags spoiler majeur comptent dans le score mais leur nom est masqué. Le menu du gestionnaire de scripts permet de voir, exporter, importer ou vider les listes.
 // @author       lennmoe
 // @homepageURL  https://github.com/lennmoe/personal-usercript
@@ -48,29 +48,31 @@
   }
 
   GM_addStyle(`
-    .vth-liked { background: rgba(60, 180, 90, 0.28); border-radius: 3px; padding: 0 3px; outline: 1px solid rgba(60, 180, 90, 0.6); }
-    .vth-avoided { background: rgba(220, 60, 60, 0.28); border-radius: 3px; padding: 0 3px; outline: 1px solid rgba(220, 60, 60, 0.6); }
-    tr.vth-row-liked > td { background: rgba(60, 180, 90, 0.10) !important; }
-    tr.vth-row-avoided > td { background: rgba(220, 60, 60, 0.10) !important; }
-    .vth-summary { margin: 0 0 6px; font-size: 0.95em; }
+    a.vth-liked { font-weight: bold; }
+    a.vth-liked::before { content: '♥ '; color: var(--statok); }
+    a.vth-avoided { color: var(--standout); }
+    a.vth-avoided::before { content: '✕ '; }
+    h1.vth-liked::before { content: '♥ '; color: var(--statok); }
+    h1.vth-avoided::before { content: '✕ '; color: var(--standout); }
+    tr.vth-row-liked > td, tr.vth-row-avoided > td { background: var(--secbg) !important; }
+    .vth-summary { margin: 0 0 5px; }
     .vth-summary b { margin-right: 4px; }
-    .vth-ok { color: #5cc77a; }
-    .vth-bad { color: #e86464; }
-    .vth-dim { opacity: 0.6; }
-    .vth-btns { margin: 8px 0; display: flex; gap: 8px; }
-    .vth-btns button { cursor: pointer; padding: 2px 10px; }
-    .vth-btns button.vth-active { font-weight: bold; text-decoration: underline; }
-    .vth-box { margin: 10px auto 0; padding: 8px 10px; border: 1px solid rgba(128, 160, 200, 0.35); border-radius: 4px; background: rgba(0, 0, 0, 0.18); text-align: left; box-sizing: border-box; }
-    .vth-box-head { display: flex; justify-content: space-between; align-items: baseline; }
-    .vth-box-head b { font-size: 1.5em; }
-    .vth-bar { height: 6px; margin: 4px 0 2px; border-radius: 3px; background: rgba(128, 128, 128, 0.25); overflow: hidden; }
-    .vth-bar > div { height: 100%; border-radius: 3px; }
-    .vth-verdict { font-size: 0.95em; margin-bottom: 6px; }
-    .vth-box ul { list-style: none; margin: 4px 0; padding: 0; }
-    .vth-box li { display: flex; justify-content: space-between; gap: 6px; line-height: 1.5; }
-    .vth-box li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .vth-box li small { opacity: 0.6; flex: none; }
-    .vth-foot { margin-top: 6px; font-size: 0.85em; opacity: 0.6; }
+    .vth-ok { color: var(--statok); }
+    .vth-bad { color: var(--standout); }
+    .vth-dim { color: var(--grayedout); }
+    .vth-btns { margin: 5px 0; display: flex; gap: 5px; }
+    .vth-btns button.vth-active { font-weight: bold; }
+    .vth-box { margin: 8px auto 0; border: 1px solid var(--border); background: var(--boxbg); text-align: left; }
+    .vth-box h2 { display: flex; justify-content: space-between; align-items: baseline; margin: 0; padding: 1px 3px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: bold; color: var(--maintext); }
+    .vth-box h2 span { font-weight: normal; }
+    .vth-box-body { padding: 3px 7px 4px; }
+    .vth-bar { height: 4px; margin: 2px 0 3px; background: var(--secbg); }
+    .vth-bar > div { height: 100%; }
+    .vth-verdict { font-style: italic; margin-bottom: 3px; }
+    .vth-box dl { display: flex; flex-wrap: wrap; margin: 0; }
+    .vth-box dt { width: 80%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vth-box dd { width: 20%; margin: 0; text-align: right; color: var(--grayedout); }
+    .vth-foot { margin-top: 3px; font-size: 11px; color: var(--grayedout); }
   `);
 
   const tagIdFromHref = (href) => href?.match(/^\/(g\d+)(?:[/?#]|$)/)?.[1] || null;
@@ -164,26 +166,37 @@
   }
 
   function tagList(cls, icon, list) {
-    const ul = document.createElement('ul');
+    const dl = document.createElement('dl');
     const sorted = [...list].sort((x, y) => y.rating - x.rating);
     sorted.slice(0, MAX_LISTED).forEach((t) => {
-      const li = document.createElement('li');
-      const name = document.createElement('span');
-      name.className = cls;
-      name.textContent = `${icon} ${t.spoiler >= 2 ? 'spoiler majeur' : t.name}`;
-      name.title = t.spoiler >= 2 ? '' : t.name;
-      const rating = document.createElement('small');
-      rating.textContent = t.rating ? t.rating.toFixed(1) : '';
-      li.append(name, rating);
-      ul.appendChild(li);
+      const dt = document.createElement('dt');
+      const iconEl = document.createElement('span');
+      iconEl.className = cls;
+      iconEl.textContent = `${icon} `;
+      dt.appendChild(iconEl);
+      if (t.spoiler >= 2) {
+        const hidden = document.createElement('i');
+        hidden.className = 'vth-dim';
+        hidden.textContent = 'spoiler majeur';
+        dt.appendChild(hidden);
+      } else {
+        const a = document.createElement('a');
+        a.href = `/${t.id}`;
+        a.textContent = t.name;
+        a.title = t.name;
+        dt.appendChild(a);
+      }
+      const dd = document.createElement('dd');
+      dd.textContent = t.rating ? t.rating.toFixed(1) : '';
+      dl.append(dt, dd);
     });
     if (sorted.length > MAX_LISTED) {
-      const li = document.createElement('li');
-      li.className = 'vth-dim';
-      li.textContent = `+${sorted.length - MAX_LISTED} autres`;
-      ul.appendChild(li);
+      const dt = document.createElement('dt');
+      dt.className = 'vth-dim';
+      dt.textContent = `+${sorted.length - MAX_LISTED} autres`;
+      dl.appendChild(dt);
     }
-    return ul;
+    return dl;
   }
 
   function renderScoreBox(liked, avoided, lists) {
@@ -200,25 +213,26 @@
     box.style.maxWidth = (host.querySelector('.imghover')?.offsetWidth || 256) + 'px';
     box.replaceChildren();
 
+    const head = document.createElement('h2');
+    head.textContent = 'Compatibilité';
+    const body = document.createElement('div');
+    body.className = 'vth-box-body';
+    box.append(head, body);
+
     const likedTotal = Object.keys(lists.liked).length;
     if (!likedTotal && !Object.keys(lists.avoided).length) {
-      box.className = 'vth-box vth-dim';
-      box.textContent = 'Shift+clic sur des tags pour les classer et voir ta compatibilité.';
+      body.className = 'vth-box-body vth-dim';
+      body.textContent = 'Shift+clic sur des tags pour les classer et voir ta compatibilité.';
       return;
     }
-    box.className = 'vth-box';
 
     const score = computeScore(liked, avoided, lists);
-    const color = `hsl(${Math.round(score * 1.2)}, 60%, 50%)`;
+    const color = score >= 60 ? 'var(--statok)' : score >= 40 ? 'var(--link)' : 'var(--standout)';
 
-    const head = document.createElement('div');
-    head.className = 'vth-box-head';
-    const title = document.createElement('span');
-    title.textContent = 'Compatibilité';
-    const pct = document.createElement('b');
+    const pct = document.createElement('span');
     pct.textContent = `${score}%`;
     pct.style.color = color;
-    head.append(title, pct);
+    head.appendChild(pct);
 
     const bar = document.createElement('div');
     bar.className = 'vth-bar';
@@ -231,14 +245,14 @@
     v.className = 'vth-verdict';
     v.textContent = verdict(score);
 
-    box.append(head, bar, v);
-    if (liked.length) box.appendChild(tagList('vth-ok', '♥', liked));
-    if (avoided.length) box.appendChild(tagList('vth-bad', '✕', avoided));
+    body.append(bar, v);
+    if (liked.length) body.appendChild(tagList('vth-ok', '♥', liked));
+    if (avoided.length) body.appendChild(tagList('vth-bad', '✕', avoided));
 
     const foot = document.createElement('div');
     foot.className = 'vth-foot';
     foot.textContent = `${liked.length}/${likedTotal} tags aimés présents · ${avoided.length} à éviter`;
-    box.appendChild(foot);
+    body.appendChild(foot);
   }
 
   function renderVnPage() {
