@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         VNDB - Wishlist Release Alerts
 // @namespace    vndb-wishlist-releases
-// @version      1.2
-// @description  Adds a "Wishlist releases" box to the VNDB sidebar: upcoming releases (date, month, year or TBA) and releases from the last 30 days for the VNs on your wishlist, filtered by language (EN + JP by default, no MTL). On your list page (/u123/ulist), a badge with flag and date is shown next to each matching VN. Data comes from the VNDB API using your session, is cached for 6 hours and can be refreshed from the box. The userscript manager menu lets you choose the tracked languages and force a refresh.
+// @version      1.7
+// @description  Adds a "Wishlist releases" box to the VNDB sidebar: upcoming releases (date, month, year or TBA) and releases from the last 30 days for the VNs on your wishlist plus any VN you choose to watch, with language flags and platform icons, filtered by language (EN + JP by default, no MTL) and optionally by platform. On your list page (/u123/ulist), a badge with flag and date is shown next to each matching VN. Data comes from the VNDB API using your session, is cached for 6 hours and can be refreshed from the box. On a VN page, "+ Watch this VN" in the box adds it to the alerts (and "- Unwatch this VN" removes it); "Edit watched VNs" in the userscript manager menu lets you edit the list by ID. The menu also lets you set your user ID if it is not detected, choose the tracked languages and platforms (codes like win, swi, ps5) and force a refresh.
 // @author       lennmoe
 // @homepageURL  https://github.com/lennmoe/personal-usercript
 // @downloadURL  https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Wishlist%20Release%20Alerts.user.js
@@ -17,8 +17,16 @@
 (function () {
   'use strict';
 
-  const CACHE_KEY = 'releaseCache';
+  const CACHE_KEY = 'releaseCacheV2';
   const LANGS_KEY = 'langs';
+  const PLATS_KEY = 'platforms';
+  const MAX_PLATS = 3;
+  const EXTRA_KEY = 'extraVns';
+
+  const currentVn = location.pathname.match(/^\/(v\d+)/)?.[1] || null;
+  const getExtras = () => GM_getValue(EXTRA_KEY, []);
+  const setExtras = (ids) => GM_setValue(EXTRA_KEY, [...new Set(ids)]);
+  const extrasKey = () => [...getExtras()].sort().join(',');
   const TTL = 6 * 3600 * 1000;
   const RECENT_DAYS = 30;
   const SOON_DAYS = 30;
@@ -29,13 +37,41 @@
   const isoDay = (date) => date.toISOString().slice(0, 10);
   const todayKey = isoDay(new Date());
 
+  const USER_KEY = 'userId';
+
+  function userFromPage() {
+    for (const a of document.querySelectorAll('a[href]')) {
+      const href = a.getAttribute('href') || '';
+      const m = href.match(/^(?:https?:\/\/vndb\.org)?\/(u\d+)\/?$/);
+      if (m && /my profile/i.test(a.textContent)) return m[1];
+    }
+    for (const a of document.querySelectorAll('nav a[href], header a[href]')) {
+      const m = (a.getAttribute('href') || '').match(/^(?:https?:\/\/vndb\.org)?\/(u\d+)(?:\/|$)/);
+      if (m) return m[1];
+    }
+    return null;
+  }
+
   function myUserId() {
-    const links = [...document.querySelectorAll('nav a[href^="/u"]')];
-    const a = links.find((x) => x.textContent.trim() === 'My Profile') || links.find((x) => /^\/u\d+$/.test(x.getAttribute('href')));
-    return a?.getAttribute('href').match(/^\/(u\d+)$/)?.[1] || null;
+    return userFromPage() || GM_getValue(USER_KEY, null);
+  }
+
+  function pageDiagnostic() {
+    const navs = document.querySelectorAll('nav').length;
+    const userLinks = [...document.querySelectorAll('a[href*="/u"]')].map((a) => a.getAttribute('href')).slice(0, 5);
+    return `nav: ${navs}, links: ${userLinks.join(' ') || 'none'}`;
+  }
+
+  function askUserId() {
+    const input = prompt('Your VNDB user ID (the number in your profile URL, e.g. u330078):', GM_getValue(USER_KEY, '') || '');
+    if (input === null) return null;
+    const id = input.trim().match(/u?(\d+)/)?.[1];
+    GM_setValue(USER_KEY, id ? `u${id}` : null);
+    return id ? `u${id}` : null;
   }
 
   const getLangs = () => GM_getValue(LANGS_KEY, ['en', 'ja']);
+  const getPlats = () => GM_getValue(PLATS_KEY, []);
 
   async function api(path, body) {
     const res = await fetch(`https://api.vndb.org/kana/${path}`, {
@@ -79,6 +115,13 @@
   async function fetchData(user) {
     const wish = await paged('ulist', { user, filters: ['label', '=', 5], fields: 'vn.title' });
     const titles = Object.fromEntries(wish.map((w) => [w.id, w.vn.title]));
+    const wishIds = Object.keys(titles);
+    const extras = getExtras().filter((id) => !titles[id]);
+    for (let i = 0; i < extras.length; i += CHUNK) {
+      const chunk = extras.slice(i, i + CHUNK).map((id) => ['id', '=', id]);
+      const vns = await paged('vn', { filters: chunk.length === 1 ? chunk[0] : ['or', ...chunk], fields: 'title' });
+      vns.forEach((v) => (titles[v.id] = v.title));
+    }
     const ids = Object.keys(titles);
     const since = isoDay(new Date(Date.now() - RECENT_DAYS * DAY));
     const releases = [];
@@ -88,27 +131,31 @@
       releases.push(
         ...(await paged('release', {
           filters: ['and', ['released', '>=', since], ['vn', '=', vnFilter]],
-          fields: 'id, title, released, languages.lang, languages.mtl, vns.id',
+          fields: 'id, title, released, platforms, languages.lang, languages.mtl, vns.id',
           sort: 'released',
         }))
       );
     }
-    return { at: Date.now(), user, titles, releases };
+    return { at: Date.now(), user, extras: extrasKey(), wishIds, titles, releases };
   }
 
   function buildItems(data) {
     const langs = getLangs();
+    const plats = getPlats();
     const byKey = new Map();
     data.releases.forEach((r) => {
       const relLangs = r.languages.filter((l) => !l.mtl && (!langs.length || langs.includes(l.lang))).map((l) => l.lang);
       if (!relLangs.length) return;
+      const relPlats = (r.platforms || []).filter((p) => !plats.length || plats.includes(p));
+      if (plats.length && !relPlats.length) return;
       const info = parseRelease(r.released);
       if (info.status === 'out' && info.key < isoDay(new Date(Date.now() - RECENT_DAYS * DAY))) return;
       r.vns.forEach(({ id }) => {
         if (!data.titles[id]) return;
         const k = `${id}|${info.key}`;
-        const item = byKey.get(k) || { vid: id, title: data.titles[id], rid: r.id, langs: [], ...info };
+        const item = byKey.get(k) || { vid: id, title: data.titles[id], rid: r.id, langs: [], plats: [], ...info };
         relLangs.forEach((l) => item.langs.includes(l) || item.langs.push(l));
+        relPlats.forEach((p) => item.plats.includes(p) || item.plats.push(p));
         byKey.set(k, item);
       });
     });
@@ -122,7 +169,10 @@
     #vra-box .vra-line { display: flex; align-items: center; gap: 3px; padding: 0; margin: 0 0 1px; }
     #vra-box .vra-line a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #vra-box .vra-line small { flex: none; }
-    #vra-box .vra-flags { flex: none; display: inline-flex; }
+    #vra-box .vra-flags, #vra-box .vra-plats { flex: none; display: inline-flex; align-items: center; }
+    .vra-plats small { font-size: 9px; color: var(--grayedout); margin-left: 1px; }
+    .vra-badge .vra-plats { display: inline-flex; align-items: center; margin-left: 2px; vertical-align: middle; }
+    #vra-box .vra-watch { margin-top: 3px; font-size: 11px; }
     #vra-box .vra-foot { display: flex; justify-content: space-between; margin-top: 2px; font-size: 11px; }
     .vra-out { color: var(--statok); }
     .vra-soon { color: var(--standout); }
@@ -143,6 +193,24 @@
     return span;
   }
 
+  function platIcons(plats, max = MAX_PLATS) {
+    const span = document.createElement('span');
+    span.className = 'vra-plats';
+    plats.slice(0, max).forEach((p) => {
+      const abbr = document.createElement('abbr');
+      abbr.className = `icon-plat-${p}`;
+      abbr.title = p;
+      span.appendChild(abbr);
+    });
+    if (plats.length > max) {
+      const more = document.createElement('small');
+      more.textContent = `+${plats.length - max}`;
+      more.title = plats.slice(max).join(', ');
+      span.appendChild(more);
+    }
+    return span;
+  }
+
   const statusText = (item) => (item.status === 'out' ? `out ${item.label}` : item.label);
 
   function ago(ts) {
@@ -153,7 +221,7 @@
 
   function renderSidebar(user, data, error) {
     const nav = document.querySelector('body > nav') || document.querySelector('#support')?.parentElement;
-    if (!nav) return;
+    if (!nav) return log('sidebar not found');
     let box = document.getElementById('vra-box');
     if (!box) {
       box = document.createElement('article');
@@ -199,12 +267,12 @@
       const a = document.createElement('a');
       a.href = `/${item.vid}`;
       a.textContent = item.title;
-      a.title = `${item.title} — ${statusText(item)}`;
+      a.title = `${item.title} — ${statusText(item)}${item.plats?.length ? ` — ${item.plats.join(', ')}` : ''}`;
       const date = document.createElement('small');
       date.className = `vra-${item.status}`;
       date.textContent = item.status === 'out' ? 'out' : item.label;
       date.title = statusText(item);
-      p.append(flags(item.langs), a, date);
+      p.append(flags(item.langs), platIcons(item.plats || [], 2), a, date);
       div.appendChild(p);
     });
 
@@ -221,9 +289,46 @@
       load(user, true);
     });
     foot.append(more, refresh);
-    div.appendChild(foot);
 
+    if (currentVn && data) {
+      const watch = document.createElement('p');
+      watch.className = 'vra-watch';
+      if (data.wishIds?.includes(currentVn)) {
+        watch.className = 'vra-watch vra-dim';
+        watch.textContent = 'This VN is on your wishlist';
+      } else {
+        const watched = getExtras().includes(currentVn);
+        const a = document.createElement('a');
+        a.textContent = watched ? '- Unwatch this VN' : '+ Watch this VN';
+        a.title = watched ? 'Stop tracking releases of this VN' : 'Track releases of this VN even if it is not on your wishlist';
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          toggleWatch(user);
+        });
+        watch.appendChild(a);
+      }
+      div.appendChild(watch);
+    }
+
+    div.appendChild(foot);
     box.append(h2, div);
+  }
+
+  function toggleWatch(user) {
+    if (!currentVn) return;
+    const extras = getExtras();
+    setExtras(extras.includes(currentVn) ? extras.filter((id) => id !== currentVn) : [...extras, currentVn]);
+    load(user, true);
+  }
+
+  function editWatched(user) {
+    const input = prompt(
+      'VNs tracked in addition to your wishlist (IDs separated by commas, e.g. v17, v2002):',
+      getExtras().join(', ')
+    );
+    if (input === null) return;
+    setExtras((input.match(/v?\d+/gi) || []).map((s) => `v${s.replace(/^v/i, '')}`));
+    load(user, true);
   }
 
   function renderBadges(user, data) {
@@ -240,43 +345,128 @@
       const badge = document.createElement('span');
       badge.className = `vra-badge vra-${item.status}`;
       badge.title = statusText(item);
-      badge.append(flags(item.langs), ` ${statusText(item)}`);
+      badge.append(flags(item.langs), platIcons(item.plats || []), ` ${statusText(item)}`);
       a.insertAdjacentElement('afterend', badge);
     });
   }
 
-  async function load(user, force = false) {
-    const cache = GM_getValue(CACHE_KEY, null);
-    const fresh = cache && cache.user === user && Date.now() - cache.at < TTL;
-    if (fresh && !force) {
-      renderSidebar(user, cache);
-      renderBadges(user, cache);
-      return;
-    }
-    renderSidebar(user, cache?.user === user ? cache : null);
+  const log = (...args) => console.error('[Wishlist Release Alerts]', ...args);
+
+  function safeRender(user, data, error) {
     try {
-      const data = await fetchData(user);
-      GM_setValue(CACHE_KEY, data);
-      renderSidebar(user, data);
+      renderSidebar(user, data, error);
       renderBadges(user, data);
     } catch (err) {
-      renderSidebar(user, null, err.message);
+      log(err);
     }
   }
 
-  function init() {
-    const user = myUserId();
-    if (!user) return;
+  async function load(user, force = false) {
+    const cache = GM_getValue(CACHE_KEY, null);
+    const fresh = cache && cache.user === user && cache.extras === extrasKey() && Date.now() - cache.at < TTL;
+    if (fresh && !force) return safeRender(user, cache);
+    safeRender(user, cache?.user === user ? cache : null);
+    try {
+      const data = await fetchData(user);
+      GM_setValue(CACHE_KEY, data);
+      safeRender(user, data);
+    } catch (err) {
+      log(err);
+      safeRender(user, null, err.message || String(err));
+    }
+  }
 
-    GM_registerMenuCommand('Refresh releases', () => load(user, true));
-    GM_registerMenuCommand('Tracked languages', () => {
-      const input = prompt('Language codes separated by commas (empty = all):', getLangs().join(', '));
-      if (input === null) return;
-      GM_setValue(LANGS_KEY, input.split(/[\s,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean));
-      load(user);
+  function showMessage(text, detail) {
+    const nav = document.querySelector('body > nav') || document.querySelector('#support')?.parentElement;
+    if (!nav) return;
+    document.getElementById('vra-box')?.remove();
+    const box = document.createElement('article');
+    box.id = 'vra-box';
+    const h2 = document.createElement('h2');
+    h2.textContent = 'Wishlist releases';
+    const div = document.createElement('div');
+    const p = document.createElement('p');
+    p.textContent = text;
+    div.appendChild(p);
+    const set = document.createElement('a');
+    set.textContent = 'Set my user ID';
+    set.addEventListener('click', (e) => {
+      e.preventDefault();
+      const user = askUserId();
+      if (user) {
+        box.remove();
+        load(user, true);
+      }
     });
+    div.appendChild(set);
+    if (detail) {
+      const small = document.createElement('p');
+      small.className = 'vra-dim';
+      small.style.fontSize = '10px';
+      small.style.wordBreak = 'break-all';
+      small.textContent = detail;
+      div.appendChild(small);
+    }
+    box.append(h2, div);
+    nav.appendChild(box);
+  }
 
-    load(user);
+  function withUser(fn) {
+    const user = myUserId() || askUserId();
+    if (user) fn(user);
+  }
+
+  GM_registerMenuCommand('Set my user ID', () => {
+    const user = askUserId();
+    if (user) load(user, true);
+  });
+  GM_registerMenuCommand('Refresh releases', () => withUser((user) => load(user, true)));
+  if (currentVn) GM_registerMenuCommand('Watch / unwatch this VN', () => withUser(toggleWatch));
+  GM_registerMenuCommand('Edit watched VNs', () => withUser(editWatched));
+  GM_registerMenuCommand('Tracked languages', () => {
+    const input = prompt('Language codes separated by commas (empty = all):', getLangs().join(', '));
+    if (input === null) return;
+    GM_setValue(LANGS_KEY, input.split(/[\s,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean));
+    withUser((user) => load(user));
+  });
+  GM_registerMenuCommand('Tracked platforms', () => {
+    const input = prompt('Platform codes separated by commas, e.g. win, swi, ps5 (empty = all):', getPlats().join(', '));
+    if (input === null) return;
+    GM_setValue(PLATS_KEY, input.split(/[\s,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean));
+    withUser((user) => load(user));
+  });
+
+  function waitForUser(timeout = 10000) {
+    return new Promise((resolve) => {
+      const found = myUserId();
+      if (found) return resolve(found);
+      const observer = new MutationObserver(() => {
+        const user = myUserId();
+        if (user) {
+          observer.disconnect();
+          clearTimeout(timer);
+          resolve(user);
+        }
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+      const timer = setTimeout(() => {
+        observer.disconnect();
+        resolve(myUserId());
+      }, timeout);
+    });
+  }
+
+  async function init() {
+    try {
+      const user = await waitForUser();
+      if (!user) {
+        if (document.querySelector('a[href^="/u/login"]')) return;
+        return showMessage('Could not find your profile link.', pageDiagnostic());
+      }
+      load(user);
+    } catch (err) {
+      showMessage(`Error: ${err.message || err}`);
+    }
   }
 
   if (document.readyState === 'loading') {

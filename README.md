@@ -27,7 +27,7 @@ A collection of userscripts for various websites.
 | VNDB CG Search Links | CG search links for e-hentai, exhentai, hitomi.la and imhentai | [Install](https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20CG%20Search%20Links.user.js) |
 | VNDB Tags Highlight | Highlight liked/avoided tags and show a compatibility % under the cover (Shift+click a tag to classify it) | [Install](https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Tags%20Highlight.user.js) |
 | VNDB English Playtime | Estimated playtime for the English translation, from jiten.moe's character count, plus days at your daily reading time | [Install](https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20English%20Playtime.user.js) |
-| VNDB Wishlist Release Alerts | Sidebar box and list badges for upcoming / recent releases of your wishlist VNs (EN + JP by default) | [Install](https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Wishlist%20Release%20Alerts.user.js) |
+| VNDB Wishlist Release Alerts | Sidebar box and list badges for upcoming / recent releases of your wishlist VNs and any VN you watch, with language and platform filters | [Install](https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Wishlist%20Release%20Alerts.user.js) |
 
 ## Usage
 
