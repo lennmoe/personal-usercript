@@ -1,9 +1,10 @@
 // ==UserScript==
-// @name         VNDB - Liens recherche CG (e-hentai / hitomi.la / imhentai)
+// @name         VNDB - Liens recherche CG (e-hentai / exhentai / hitomi.la / imhentai)
 // @namespace    vndb-cg-search-links
-// @version      1.0
-// @description  Ajoute une ligne avec des liens de recherche CG pour le(s) titre(s) JP et EN uniquement (pas les aliases)
+// @version      1.1
+// @description  Ajoute une ligne "CG Search" sous "Release Dates" avec des liens de recherche e-hentai, exhentai, hitomi.la et imhentai pour les titres JP (original + romaji) et EN uniquement, jamais les aliases. Le titre complet est visible au survol du drapeau.
 // @author       lennmoe
+// @homepageURL  https://github.com/lennmoe/personal-usercript
 // @match        https://vndb.org/v*
 // @match        https://vndb.org/*v*
 // @grant        none
@@ -12,16 +13,10 @@
 (function () {
   'use strict';
 
-  // --- Config des sites de recherche ---
   const SITES = [
-    {
-      name: 'e-hentai',
-      build: (q) => `https://e-hentai.org/?f_search=${encodeURIComponent(q)}`,
-    },
-    {
-      name: 'hitomi',
-      build: (q) => `https://hitomi.la/search.html?${encodeURIComponent(q)}`,
-    },
+    { name: 'e-hentai', build: (q) => `https://e-hentai.org/?f_search=${encodeURIComponent(q)}` },
+    { name: 'exhentai', build: (q) => `https://exhentai.org/?f_search=${encodeURIComponent(q)}` },
+    { name: 'hitomi', build: (q) => `https://hitomi.la/search.html?${encodeURIComponent(q)}` },
     {
       name: 'imhentai',
       build: (q) =>
@@ -31,37 +26,30 @@
     },
   ];
 
-  // --- Récupération des titres depuis la page (uniquement JP et EN, jamais les aliases) ---
+  function findRow(label) {
+    return [...document.querySelectorAll('tbody > tr')].find((tr) =>
+      label.test(tr.querySelector('td')?.textContent?.trim() || '')
+    );
+  }
+
   function getTitles() {
     const titles = [];
     const seen = new Set();
 
-    // Le bloc "Titles" utilise <td class="titles">, alors que le bloc "Other Links"
-    // utilise <td class="titles scriptLinks">. On exclut ce dernier pour ne pas
-    // capturer des liens de boutique comme "ErogameScape", "Getchu", etc.
-    // Ancien format de fiche : <tr><td>Title</td><td><table>...<tr class="title">...</table></td></tr>
     let titlesCell = document.querySelector('td.titles:not(.scriptLinks)');
-    if (!titlesCell) {
-      const rows = [...document.querySelectorAll('tbody > tr')];
-      const oldTitleRow = rows.find(
-        (tr) => /^Title$/i.test(tr.querySelector('td')?.textContent?.trim() || '')
-      );
-      if (oldTitleRow) titlesCell = oldTitleRow.querySelectorAll('td')[1];
-    }
+    if (!titlesCell) titlesCell = findRow(/^Title$/i)?.querySelectorAll('td')[1];
     if (!titlesCell) return [];
 
     titlesCell.querySelectorAll('tr.title').forEach((tr) => {
       const abbr = tr.querySelector('abbr');
       const isJa = abbr?.classList.contains('icon-lang-ja');
       const isEn = abbr?.classList.contains('icon-lang-en');
-      if (!isJa && !isEn) return; // on ignore ko, zh-Hans, zh-Hant, etc.
+      if (!isJa && !isEn) return;
       const lang = isJa ? 'ja' : 'en';
 
-      const cells = tr.querySelectorAll('td');
-      const cell = cells[1]; // 2e <td> = celui qui contient le(s) titre(s)
+      const cell = tr.querySelectorAll('td')[1];
       if (!cell) return;
 
-      // Le titre romaji est parfois après un <br> dans le même td (ex: JP<br>Romaji)
       cell.innerHTML
         .split(/<br\s*\/?>/i)
         .map((part) => {
@@ -70,19 +58,17 @@
           return tmp.textContent.trim();
         })
         .filter(Boolean)
-        .forEach((text) => {
+        .forEach((text, i) => {
           const key = lang + '|' + text;
-          if (!seen.has(key)) {
-            seen.add(key);
-            titles.push({ text, lang, abbrNode: abbr.cloneNode(true) });
-          }
+          if (seen.has(key)) return;
+          seen.add(key);
+          titles.push({ text, romaji: lang === 'ja' && i > 0, abbrNode: abbr });
         });
     });
 
     return titles;
   }
 
-  // --- Construction de la ligne de tableau (même format que les autres rows de la fiche) ---
   function buildLinksRow(titles) {
     const tr = document.createElement('tr');
     tr.id = 'cg-search-links-row';
@@ -92,29 +78,34 @@
     tr.appendChild(tdLabel);
 
     const tdContent = document.createElement('td');
-    tdContent.id = 'officialLinks';
     tdContent.className = 'scriptLinks';
 
-    titles.forEach(({ text, abbrNode }) => {
+    titles.forEach(({ text, romaji, abbrNode }) => {
       const line = document.createElement('div');
+      line.title = text;
+      line.style.whiteSpace = 'nowrap';
 
-      const label = document.createElement('span');
-      label.style.opacity = '0.8';
-      if (abbrNode) {
-        label.appendChild(abbrNode.cloneNode(true));
-        label.appendChild(document.createTextNode(' ' + text + ' — '));
-      } else {
-        label.textContent = text + ' — ';
-      }
-      line.appendChild(label);
+      const tag = document.createElement('span');
+      tag.style.display = 'inline-block';
+      tag.style.minWidth = '4.5em';
+      tag.style.opacity = '0.7';
+      tag.style.cursor = 'help';
+      tag.appendChild(abbrNode.cloneNode(true));
+      if (romaji) tag.appendChild(document.createTextNode(' romaji'));
+      line.appendChild(tag);
 
-      SITES.forEach((site) => {
+      SITES.forEach((site, i) => {
+        if (i > 0) {
+          const sep = document.createElement('span');
+          sep.textContent = ' · ';
+          sep.style.opacity = '0.4';
+          line.appendChild(sep);
+        }
         const a = document.createElement('a');
         a.href = site.build(text);
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
         a.textContent = site.name;
-        a.style.marginRight = '0.6em';
         line.appendChild(a);
       });
 
@@ -125,26 +116,18 @@
     return tr;
   }
 
-  // --- Injection dans la page ---
   function init() {
+    if (document.getElementById('cg-search-links-row')) return;
     const titles = getTitles();
     if (!titles.length) return;
-    if (document.getElementById('cg-search-links-row')) return; // évite les doublons
 
     const row = buildLinksRow(titles);
+    const anchorRow =
+      findRow(/^Release Dates$/i) ||
+      [...document.querySelectorAll('tbody > tr')].find((tr) => tr.querySelector('td.titles:not(.scriptLinks)')) ||
+      findRow(/^Title$/i);
 
-    // On insère juste après la ligne "Release Dates"
-    const rows = [...document.querySelectorAll('tbody > tr')];
-    const releaseDatesRow = rows.find((tr) =>
-      /^Release Dates$/i.test(tr.querySelector('td')?.textContent?.trim() || '')
-    );
-    const titlesDetailsRow = rows.find((tr) => tr.querySelector('td.titles:not(.scriptLinks)'));
-    const titleRow = rows.find((tr) =>
-      /^Title$/i.test(tr.querySelector('td')?.textContent?.trim() || '')
-    );
-
-    const anchorRow = releaseDatesRow || titlesDetailsRow || titleRow;
-    if (anchorRow && anchorRow.parentNode) {
+    if (anchorRow?.parentNode) {
       anchorRow.parentNode.insertBefore(row, anchorRow.nextSibling);
     } else {
       const tbody = document.querySelector('tbody');
