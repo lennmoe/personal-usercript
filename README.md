@@ -25,6 +25,7 @@ A collection of userscripts for various websites.
 | VNDB Official Links and Release Dates | Show official links and release information | [Install](https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Official%20Links%20and%20Release%20Dates.user.js) |
 | VNDB Score Graph | Display score graphs for visual novels | [Install](https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Score%20Graph.user.js) |
 | VNDB Liens recherche CG | CG search links for e-hentai, exhentai, hitomi.la and imhentai | [Install](https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Liens%20recherche%20CG.user.js) |
+| VNDB Tags Highlight | Highlight liked/avoided tags and show a compatibility % under the cover (Shift+click a tag to classify it) | [Install](https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Tags%20Highlight.user.js) |
 
 ## Usage
 
