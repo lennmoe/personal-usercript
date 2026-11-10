@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         VNDB - Tags Highlight
 // @namespace    vndb-tags-highlight
-// @version      1.2
-// @description  Surligne en vert les tags que tu aimes et en rouge ceux à éviter, sur la fiche VN et sur la page /tags. Shift+clic sur un tag pour passer de neutre → aimé → à éviter → neutre ; sur une page de tag (/g123), des boutons font la même chose. Sous la cover de la fiche, une case affiche ta compatibilité en % : 50% de base, jusqu'à +50% selon la note (0–3) de tes tags aimés présents (objectif = min(tags aimés, 5) tags notés 3.0), et −35% par tag à éviter noté 3.0 (proportionnel à la note). Les tags spoiler majeur comptent dans le score mais leur nom est masqué. Le menu du gestionnaire de scripts permet de voir, exporter, importer ou vider les listes.
+// @version      1.3
+// @description  Highlights the tags you like (♥) and the ones you avoid (✕) on VN pages and on the /tags page. Shift+click a tag to cycle neutral → liked → avoided → neutral; on a tag page (/g123), buttons do the same. Under the cover, a box shows your compatibility %: 50% base, up to +50% from the rating (0–3) of your liked tags present (target = min(liked tags, 5) tags rated 3.0), and −35% per avoided tag rated 3.0 (scaled by rating). Major spoiler tags count in the score but their name is hidden. The userscript manager menu lets you view, export, import or clear your lists.
 // @author       lennmoe
 // @homepageURL  https://github.com/lennmoe/personal-usercript
 // @downloadURL  https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Tags%20Highlight.user.js
@@ -138,12 +138,12 @@
       return s;
     };
     const label = document.createElement('b');
-    label.textContent = 'Tags perso :';
+    label.textContent = 'My tags:';
     summary.append(label, part('vth-ok', '♥', liked), ' · ', part('vth-bad', '✕', avoided));
     if (!liked.length && !avoided.length) {
       const hint = document.createElement('span');
       hint.className = 'vth-dim';
-      hint.textContent = ' (Shift+clic sur un tag pour le classer)';
+      hint.textContent = ' (Shift+click a tag to classify it)';
       summary.append(hint);
     }
   }
@@ -158,11 +158,11 @@
   }
 
   function verdict(score) {
-    if (score >= 80) return 'Fait pour toi';
-    if (score >= 60) return 'Tu devrais aimer';
-    if (score >= 40) return 'Mitigé';
-    if (score >= 20) return 'Probablement pas pour toi';
-    return 'À éviter';
+    if (score >= 80) return 'Made for you';
+    if (score >= 60) return 'You should like it';
+    if (score >= 40) return 'Mixed';
+    if (score >= 20) return 'Probably not for you';
+    return 'Avoid';
   }
 
   function tagList(cls, icon, list) {
@@ -177,7 +177,7 @@
       if (t.spoiler >= 2) {
         const hidden = document.createElement('i');
         hidden.className = 'vth-dim';
-        hidden.textContent = 'spoiler majeur';
+        hidden.textContent = 'major spoiler';
         dt.appendChild(hidden);
       } else {
         const a = document.createElement('a');
@@ -193,7 +193,7 @@
     if (sorted.length > MAX_LISTED) {
       const dt = document.createElement('dt');
       dt.className = 'vth-dim';
-      dt.textContent = `+${sorted.length - MAX_LISTED} autres`;
+      dt.textContent = `+${sorted.length - MAX_LISTED} more`;
       dl.appendChild(dt);
     }
     return dl;
@@ -214,7 +214,7 @@
     box.replaceChildren();
 
     const head = document.createElement('h2');
-    head.textContent = 'Compatibilité';
+    head.textContent = 'Compatibility';
     const body = document.createElement('div');
     body.className = 'vth-box-body';
     box.append(head, body);
@@ -222,7 +222,7 @@
     const likedTotal = Object.keys(lists.liked).length;
     if (!likedTotal && !Object.keys(lists.avoided).length) {
       body.className = 'vth-box-body vth-dim';
-      body.textContent = 'Shift+clic sur des tags pour les classer et voir ta compatibilité.';
+      body.textContent = 'Shift+click tags to classify them and see your compatibility.';
       return;
     }
 
@@ -251,7 +251,7 @@
 
     const foot = document.createElement('div');
     foot.className = 'vth-foot';
-    foot.textContent = `${liked.length}/${likedTotal} tags aimés présents · ${avoided.length} à éviter`;
+    foot.textContent = `${liked.length}/${likedTotal} liked tags present · ${avoided.length} avoided`;
     body.appendChild(foot);
   }
 
@@ -318,7 +318,7 @@
       });
       return b;
     };
-    const btns = [makeBtn('liked', '♥ J\'aime'), makeBtn('avoided', '✕ À éviter')];
+    const btns = [makeBtn('liked', '♥ Like'), makeBtn('avoided', '✕ Avoid')];
     box.append(...btns);
     h1.insertAdjacentElement('afterend', box);
 
@@ -331,30 +331,30 @@
     refresh();
   }
 
-  GM_registerMenuCommand('Voir mes tags', () => {
+  GM_registerMenuCommand('View my tags', () => {
     const { liked, avoided } = load();
-    const fmt = (o) => Object.entries(o).map(([id, n]) => `  ${n} (${id})`).join('\n') || '  (aucun)';
-    alert(`♥ Aimés :\n${fmt(liked)}\n\n✕ À éviter :\n${fmt(avoided)}`);
+    const fmt = (o) => Object.entries(o).map(([id, n]) => `  ${n} (${id})`).join('\n') || '  (none)';
+    alert(`♥ Liked:\n${fmt(liked)}\n\n✕ Avoided:\n${fmt(avoided)}`);
   });
 
-  GM_registerMenuCommand('Exporter les tags (JSON)', () => {
-    prompt('Copie ce JSON :', JSON.stringify(load()));
+  GM_registerMenuCommand('Export tags (JSON)', () => {
+    prompt('Copy this JSON:', JSON.stringify(load()));
   });
 
-  GM_registerMenuCommand('Importer des tags (JSON)', () => {
-    const raw = prompt('Colle le JSON exporté :');
+  GM_registerMenuCommand('Import tags (JSON)', () => {
+    const raw = prompt('Paste the exported JSON:');
     if (!raw) return;
     try {
       const data = JSON.parse(raw);
       save({ liked: data.liked || {}, avoided: data.avoided || {} });
       location.reload();
     } catch {
-      alert('JSON invalide.');
+      alert('Invalid JSON.');
     }
   });
 
-  GM_registerMenuCommand('Vider les listes', () => {
-    if (confirm('Supprimer tous les tags aimés et à éviter ?')) {
+  GM_registerMenuCommand('Clear lists', () => {
+    if (confirm('Delete all liked and avoided tags?')) {
       save({ liked: {}, avoided: {} });
       location.reload();
     }

@@ -1,12 +1,12 @@
 // ==UserScript==
-// @name         VNDB - Alerte sorties wishlist
+// @name         VNDB - Wishlist Release Alerts
 // @namespace    vndb-wishlist-releases
-// @version      1.0
-// @description  Ajoute un encadré "Sorties wishlist" dans le menu de gauche de VNDB : les releases à venir (date, mois, année ou TBA) et celles sorties ces 30 derniers jours pour les VN de ta wishlist, filtrées par langue (EN + JP par défaut, sans les MTL). Sur ta page de liste (/u123/ulist), un badge avec drapeau et date s'affiche à côté de chaque VN concerné. Les données viennent de l'API VNDB avec ta session, sont mises en cache 6 h et se rafraîchissent depuis l'encadré (↻). Le menu du gestionnaire de scripts permet de choisir les langues suivies et de forcer le rafraîchissement.
+// @version      1.1
+// @description  Adds a "Wishlist releases" box to the VNDB sidebar: upcoming releases (date, month, year or TBA) and releases from the last 30 days for the VNs on your wishlist, filtered by language (EN + JP by default, no MTL). On your list page (/u123/ulist), a badge with flag and date is shown next to each matching VN. Data comes from the VNDB API using your session, is cached for 6 hours and can be refreshed from the box. The userscript manager menu lets you choose the tracked languages and force a refresh.
 // @author       lennmoe
 // @homepageURL  https://github.com/lennmoe/personal-usercript
-// @downloadURL  https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Alerte%20sorties%20wishlist.user.js
-// @updateURL    https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Alerte%20sorties%20wishlist.user.js
+// @downloadURL  https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Wishlist%20Release%20Alerts.user.js
+// @updateURL    https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Wishlist%20Release%20Alerts.user.js
 // @match        https://vndb.org/*
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -43,7 +43,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (res.status === 429) throw new Error('trop de requêtes, réessaie plus tard');
+    if (res.status === 429) throw new Error('too many requests, try again later');
     if (!res.ok) throw new Error(`${res.status}`);
     return res.json();
   }
@@ -63,12 +63,12 @@
     const [y, m, d] = released.split('-');
     if (!m) return { key: `${y}-99-99`, status: y < todayKey.slice(0, 4) ? 'out' : 'future', label: y };
     if (!d) {
-      const monthLabel = new Date(+y, +m - 1, 1).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
+      const monthLabel = new Date(+y, +m - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
       return { key: `${y}-${m}-99`, status: `${y}-${m}` < todayKey.slice(0, 7) ? 'out' : 'future', label: monthLabel };
     }
     const date = new Date(`${released}T00:00:00`);
     const sameYear = +y === new Date().getFullYear();
-    const label = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
+    const label = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
     let status = 'future';
     if (released <= todayKey) status = 'out';
     else if (date - Date.now() <= SOON_DAYS * DAY) status = 'soon';
@@ -142,12 +142,12 @@
     return span;
   }
 
-  const statusText = (item) => (item.status === 'out' ? `sorti ${item.label}` : item.label);
+  const statusText = (item) => (item.status === 'out' ? `out ${item.label}` : item.label);
 
   function ago(ts) {
     const min = Math.round((Date.now() - ts) / 60000);
-    if (min < 60) return `${min} min`;
-    return `${Math.round(min / 60)} h`;
+    if (min < 60) return `${min} min ago`;
+    return `${Math.round(min / 60)} h ago`;
   }
 
   function renderSidebar(user, data, error) {
@@ -165,7 +165,7 @@
 
     const items = data ? buildItems(data) : [];
     const h2 = document.createElement('h2');
-    h2.textContent = 'Sorties wishlist';
+    h2.textContent = 'Wishlist releases';
     const hot = items.filter((i) => i.status === 'out' || i.status === 'soon').length;
     if (hot) {
       const n = document.createElement('span');
@@ -178,17 +178,17 @@
     if (error) {
       const p = document.createElement('p');
       p.className = 'vra-dim';
-      p.textContent = `Erreur : ${error}`;
+      p.textContent = `Error: ${error}`;
       div.appendChild(p);
     } else if (!data) {
       const p = document.createElement('p');
       p.className = 'vra-dim';
-      p.textContent = 'Chargement…';
+      p.textContent = 'Loading...';
       div.appendChild(p);
     } else if (!items.length) {
       const p = document.createElement('p');
       p.className = 'vra-dim';
-      p.textContent = 'Aucune sortie prévue.';
+      p.textContent = 'No upcoming releases.';
       div.appendChild(p);
     }
 
@@ -201,7 +201,7 @@
       a.title = `${item.title} — ${statusText(item)}`;
       const date = document.createElement('small');
       date.className = `vra-${item.status}`;
-      date.textContent = item.status === 'out' ? '✓' : item.label;
+      date.textContent = item.status === 'out' ? 'out' : item.label;
       date.title = statusText(item);
       p.append(flags(item.langs), a, date);
       div.appendChild(p);
@@ -211,10 +211,10 @@
     foot.className = 'vra-foot';
     const more = document.createElement('a');
     more.href = `/${user}/ulist?l=5`;
-    more.textContent = items.length > MAX_LINES ? `+${items.length - MAX_LINES} autres »` : 'wishlist »';
+    more.textContent = items.length > MAX_LINES ? `+${items.length - MAX_LINES} more` : 'wishlist';
     const refresh = document.createElement('a');
-    refresh.textContent = data ? `↻ ${ago(data.at)}` : '↻';
-    refresh.title = 'Rafraîchir';
+    refresh.textContent = data ? `refresh (${ago(data.at)})` : 'refresh';
+    refresh.title = 'Refresh now';
     refresh.addEventListener('click', (e) => {
       e.preventDefault();
       load(user, true);
@@ -239,7 +239,7 @@
       const badge = document.createElement('span');
       badge.className = `vra-badge vra-${item.status}`;
       badge.title = statusText(item);
-      badge.append(flags(item.langs), ` ${item.status === 'out' ? `sorti ${item.label}` : item.label}`);
+      badge.append(flags(item.langs), ` ${statusText(item)}`);
       a.insertAdjacentElement('afterend', badge);
     });
   }
@@ -267,9 +267,9 @@
     const user = myUserId();
     if (!user) return;
 
-    GM_registerMenuCommand('Rafraîchir les sorties', () => load(user, true));
-    GM_registerMenuCommand('Langues suivies', () => {
-      const input = prompt('Codes langue séparés par des virgules (vide = toutes) :', getLangs().join(', '));
+    GM_registerMenuCommand('Refresh releases', () => load(user, true));
+    GM_registerMenuCommand('Tracked languages', () => {
+      const input = prompt('Language codes separated by commas (empty = all):', getLangs().join(', '));
       if (input === null) return;
       GM_setValue(LANGS_KEY, input.split(/[\s,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean));
       load(user);

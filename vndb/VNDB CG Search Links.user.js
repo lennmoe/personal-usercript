@@ -1,12 +1,12 @@
 // ==UserScript==
-// @name         VNDB - Liens recherche CG (e-hentai / exhentai / hitomi.la / imhentai)
+// @name         VNDB - CG Search Links (e-hentai / exhentai / hitomi.la / imhentai)
 // @namespace    vndb-cg-search-links
-// @version      1.1
-// @description  Ajoute une ligne "CG Search" sous "Release Dates" avec des liens de recherche e-hentai, exhentai, hitomi.la et imhentai pour les titres JP (original + romaji) et EN uniquement, jamais les aliases. Le titre complet est visible au survol du drapeau.
+// @version      1.2
+// @description  Adds a "CG Search" row below "Release Dates" with e-hentai, exhentai, hitomi.la and imhentai search links for the JP (original + romaji) and EN titles only, never the aliases. Hover a line to see the full title.
 // @author       lennmoe
 // @homepageURL  https://github.com/lennmoe/personal-usercript
-// @downloadURL  https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Liens%20recherche%20CG.user.js
-// @updateURL    https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Liens%20recherche%20CG.user.js
+// @downloadURL  https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20CG%20Search%20Links.user.js
+// @updateURL    https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20CG%20Search%20Links.user.js
 // @match        https://vndb.org/v*
 // @match        https://vndb.org/*v*
 // @grant        none
