@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         VNDB - Wishlist Release Alerts
 // @namespace    vndb-wishlist-releases
-// @version      1.7
-// @description  Adds a "Wishlist releases" box to the VNDB sidebar: upcoming releases (date, month, year or TBA) and releases from the last 30 days for the VNs on your wishlist plus any VN you choose to watch, with language flags and platform icons, filtered by language (EN + JP by default, no MTL) and optionally by platform. On your list page (/u123/ulist), a badge with flag and date is shown next to each matching VN. Data comes from the VNDB API using your session, is cached for 6 hours and can be refreshed from the box. On a VN page, "+ Watch this VN" in the box adds it to the alerts (and "- Unwatch this VN" removes it); "Edit watched VNs" in the userscript manager menu lets you edit the list by ID. The menu also lets you set your user ID if it is not detected, choose the tracked languages and platforms (codes like win, swi, ps5) and force a refresh.
+// @version      1.8
+// @description  Adds a "Wishlist releases" box to the VNDB sidebar: upcoming releases (date, month, year or TBA) and releases from the last 30 days for the VNs on your wishlist plus any VN you choose to watch, with language flags and platform icons, filtered by language (EN + JP by default, no MTL) and optionally by platform. On your list page (/u123/ulist), a badge with flag and date is shown next to each matching VN. Data comes from the VNDB API using your session, is cached for 6 hours and can be refreshed from the box; "+N more" expands the box to show every release. On a VN page, "+ Watch this VN" in the box adds it to the alerts (and "- Unwatch this VN" removes it); "Edit watched VNs" in the userscript manager menu lets you edit the list by ID. The menu also lets you set your user ID if it is not detected, choose the tracked languages and platforms (codes like win, swi, ps5) and force a refresh.
 // @author       lennmoe
 // @homepageURL  https://github.com/lennmoe/personal-usercript
 // @downloadURL  https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Wishlist%20Release%20Alerts.user.js
@@ -22,6 +22,7 @@
   const PLATS_KEY = 'platforms';
   const MAX_PLATS = 3;
   const EXTRA_KEY = 'extraVns';
+  const EXPANDED_KEY = 'expanded';
 
   const currentVn = location.pathname.match(/^\/(v\d+)/)?.[1] || null;
   const getExtras = () => GM_getValue(EXTRA_KEY, []);
@@ -173,7 +174,7 @@
     .vra-plats small { font-size: 9px; color: var(--grayedout); margin-left: 1px; }
     .vra-badge .vra-plats { display: inline-flex; align-items: center; margin-left: 2px; vertical-align: middle; }
     #vra-box .vra-watch { margin-top: 3px; font-size: 11px; }
-    #vra-box .vra-foot { display: flex; justify-content: space-between; margin-top: 2px; font-size: 11px; }
+    #vra-box .vra-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; font-size: 11px; }
     .vra-out { color: var(--statok); }
     .vra-soon { color: var(--standout); }
     .vra-future, .vra-tba, .vra-dim { color: var(--grayedout); }
@@ -261,7 +262,8 @@
       div.appendChild(p);
     }
 
-    items.slice(0, MAX_LINES).forEach((item) => {
+    const expanded = GM_getValue(EXPANDED_KEY, false);
+    items.slice(0, expanded ? items.length : MAX_LINES).forEach((item) => {
       const p = document.createElement('p');
       p.className = 'vra-line';
       const a = document.createElement('a');
@@ -279,8 +281,17 @@
     const foot = document.createElement('p');
     foot.className = 'vra-foot';
     const more = document.createElement('a');
-    more.href = `/${user}/ulist?l=5`;
-    more.textContent = items.length > MAX_LINES ? `+${items.length - MAX_LINES} more` : 'wishlist';
+    if (items.length > MAX_LINES) {
+      more.textContent = expanded ? 'show less' : `+${items.length - MAX_LINES} more`;
+      more.addEventListener('click', (e) => {
+        e.preventDefault();
+        GM_setValue(EXPANDED_KEY, !expanded);
+        renderSidebar(user, data, error);
+      });
+    } else {
+      more.href = `/${user}/ulist?l=5`;
+      more.textContent = 'wishlist';
+    }
     const refresh = document.createElement('a');
     refresh.textContent = data ? `refresh (${ago(data.at)})` : 'refresh';
     refresh.title = 'Refresh now';
