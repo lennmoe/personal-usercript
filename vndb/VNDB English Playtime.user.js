@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         VNDB - English Playtime
 // @namespace    vndb-english-playtime
-// @version      1.0
-// @description  Adds a "Playtime EN (est.)" row on VNDB pages, like jiten's "Playtime (est.)" but for reading the English translation. It takes the Japanese character count from jiten.moe, converts it to English words (default 0.5 words per JP character) and divides by your English reading speed (default 250 words/min). It also shows the estimated word count and how many days it takes at your daily reading time (default 2h/day). Click "settings" in the row to change the speed, the conversion ratio and the hours per day.
+// @version      1.1
+// @description  Adds a "Playtime EN" row on VNDB pages, like jiten's "Playtime (est.)" but for reading the English translation. It takes the Japanese character count from jiten.moe, converts it to English words (default 0.5 words per JP character) and divides by your English reading speed (default 250 words/min). It also shows the estimated word count and how many days it takes at your daily reading time (default 2h/day). Click "settings" in the row to change the speed, the conversion ratio and the hours per day.
 // @author       lennmoe
 // @homepageURL  https://github.com/lennmoe/personal-usercript
 // @downloadURL  https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20English%20Playtime.user.js
@@ -95,7 +95,7 @@
     const tdL = document.createElement('td');
     const label = document.createElement('span');
     label.className = 'vep-label';
-    label.textContent = 'Playtime EN (est.)';
+    label.textContent = 'Playtime EN';
     tdL.appendChild(label);
 
     const tdV = document.createElement('td');
@@ -152,7 +152,7 @@
         parts.push(`${days} day${days > 1 ? 's' : ''} at ${formatTime(s.hoursPerDay)}/day`);
       }
       info.textContent = ` · ${parts.join(' · ')}`;
-      label.title = `Estimated from ${fmtNum(chars)} JP characters (jiten.moe) x ${s.wordsPerChar} = ${fmtNum(words)} English words, read at ${s.wpm} words/min.`;
+      label.title = `Estimated English playtime. Based on ${fmtNum(chars)} JP characters (jiten.moe) x ${s.wordsPerChar} = ${fmtNum(words)} English words, read at ${s.wpm} words/min.`;
     }
 
     render();
