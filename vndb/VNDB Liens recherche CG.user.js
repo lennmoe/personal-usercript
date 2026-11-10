@@ -5,6 +5,8 @@
 // @description  Ajoute une ligne "CG Search" sous "Release Dates" avec des liens de recherche e-hentai, exhentai, hitomi.la et imhentai pour les titres JP (original + romaji) et EN uniquement, jamais les aliases. Le titre complet est visible au survol du drapeau.
 // @author       lennmoe
 // @homepageURL  https://github.com/lennmoe/personal-usercript
+// @downloadURL  https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Liens%20recherche%20CG.user.js
+// @updateURL    https://github.com/lennmoe/personal-usercript/raw/main/vndb/VNDB%20Liens%20recherche%20CG.user.js
 // @match        https://vndb.org/v*
 // @match        https://vndb.org/*v*
 // @grant        none
